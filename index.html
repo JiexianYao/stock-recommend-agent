@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockAgent - 金融荐股智能体</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+  .container { max-width:900px; margin:0 auto; padding:20px; }
+
+  /* Hero */
+  .hero { text-align:center; padding:60px 0 40px; }
+  .hero h1 { font-size:2.5rem; background:linear-gradient(135deg, var(--accent), #818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero p { color:var(--muted); font-size:1.1rem; margin-top:12px; }
+  .badge { display:inline-block; padding:4px 14px; border-radius:20px; font-size:0.8rem; margin:8px 4px; background:var(--card); border:1px solid var(--border); }
+
+  /* Demo */
+  .demo { background:var(--card); border-radius:16px; padding:32px; margin:24px 0; border:1px solid var(--border); }
+  .demo h2 { font-size:1.3rem; margin-bottom:16px; }
+  .query-row { display:flex; gap:12px; }
+  .query-row input { flex:1; padding:12px 16px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:1rem; outline:none; }
+  .query-row input:focus { border-color:var(--accent); }
+  .query-row button { padding:12px 24px; border-radius:10px; border:none; background:var(--accent); color:#0f172a; font-weight:600; cursor:pointer; font-size:1rem; }
+  .query-row button:hover { opacity:0.9; }
+  .quick-tags { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .tag { padding:6px 14px; border-radius:20px; font-size:0.85rem; background:var(--bg); border:1px solid var(--border); cursor:pointer; color:var(--muted); transition:all .2s; }
+  .tag:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* Result */
+  .result { margin-top:24px; display:none; }
+  .result.show { display:block; }
+  .result-card { background:var(--bg); border-radius:12px; padding:24px; border:1px solid var(--border); animation:fadeIn .4s; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+  .stock-header { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
+  .stock-code { font-size:2rem; font-weight:700; color:var(--accent); }
+  .stock-name { font-size:1.2rem; color:var(--muted); }
+  .rec-badge { padding:6px 16px; border-radius:20px; font-weight:600; font-size:0.9rem; }
+  .rec-badge.recommend { background:rgba(74,222,128,.15); color:var(--green); }
+  .rec-badge.hold { background:rgba(251,191,36,.15); color:var(--amber); }
+  .reasoning { color:var(--text); margin:12px 0; line-height:1.7; }
+  .sources { margin-top:16px; }
+  .sources a { color:var(--accent); font-size:0.85rem; display:block; margin:4px 0; word-break:break-all; }
+  .risk { margin-top:16px; padding:12px; border-radius:8px; background:rgba(248,113,113,.1); color:var(--red); font-size:0.9rem; }
+  .spinner { display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; margin-right:8px; vertical-align:middle; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  .loading-text { color:var(--muted); }
+
+  /* Architecture */
+  .arch { margin:48px 0; }
+  .arch h2 { font-size:1.3rem; margin-bottom:24px; text-align:center; }
+  .arch-flow { display:flex; flex-direction:column; align-items:center; gap:0; }
+  .arch-box { padding:14px 28px; border-radius:10px; font-weight:600; text-align:center; width:100%; max-width:500px; }
+  .arch-box.user { background:rgba(56,189,248,.1); border:1px solid rgba(56,189,248,.3); }
+  .arch-box.agent { background:rgba(129,140,248,.1); border:1px solid rgba(129,140,248,.3); }
+  .arch-box.skills { background:rgba(74,222,128,.1); border:1px solid rgba(74,222,128,.3); display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .arch-box.skills span { padding:6px 14px; border-radius:6px; background:rgba(74,222,128,.15); font-size:0.9rem; }
+  .arch-box.output { background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.3); }
+  .arch-arrow { color:var(--muted); font-size:1.5rem; padding:4px 0; }
+
+  /* Footer */
+  .footer { text-align:center; padding:40px 0; color:var(--muted); font-size:0.85rem; }
+  .footer a { color:var(--accent); }
+
+  @media (max-width:600px) {
+    .hero h1 { font-size:1.6rem; }
+    .query-row { flex-direction:column; }
+    .stock-code { font-size:1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>StockAgent</h1>
+    <p>AI 驱动的金融荐股智能体 —— LLM 自主搜索权威数据，为荐股结果做背书</p>
+    <div>
+      <span class="badge">Google Gemini</span>
+      <span class="badge">OpenAI 兼容</span>
+      <span class="badge">联网搜索</span>
+      <span class="badge">结构化输出</span>
+    </div>
+  </div>
+
+  <!-- Demo -->
+  <div class="demo">
+    <h2>试用 Demo（模拟数据演示）</h2>
+    <div class="query-row">
+      <input type="text" id="query" placeholder="例如：推荐一支新能源龙头股..." />
+      <button onclick="runDemo()" id="btn">分析</button>
+    </div>
+    <div class="quick-tags">
+      <span class="tag" onclick="pick('推荐一支新能源龙头股，要有数据支撑')">新能源龙头</span>
+      <span class="tag" onclick="pick('茅台和五粮液哪个更值得投资？')">白酒对比</span>
+      <span class="tag" onclick="pick('半导体行业最近有什么利好消息？')">半导体利好</span>
+      <span class="tag" onclick="pick('北向资金最近在加仓哪些板块？')">北向资金</span>
+    </div>
+
+    <div class="result" id="result"></div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="arch">
+    <h2>系统架构</h2>
+    <div class="arch-flow">
+      <div class="arch-box user">用户输入：自然语言荐股请求</div>
+      <div class="arch-arrow">&#8595;</div>
+      <div class="arch-box agent">Agent 核心 (80行) — LLM 自主决策搜索策略</div>
+      <div class="arch-arrow">&#8595;</div>
+      <div class="arch-box skills">
+        <span>Search Skill 联网搜索</span>
+        <span>Extract Skill 数据提取</span>
+        <span>Analyze Skill 荐股分析</span>
+      </div>
+      <div class="arch-arrow">&#8595;</div>
+      <div class="arch-box output">结构化输出：股票代码 + 推理 + 数据来源 URL</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>
+      <a href="https://github.com/JiexianYao/stock-recommend-agent" target="_blank">GitHub</a> &middot;
+      MIT License
+    </p>
+    <p style="margin-top:8px">以上 Demo 为模拟数据，不构成投资建议。股市有风险，投资需谨慎。</p>
+  </div>
+</div>
+
+<script>
+// ── Mock 数据 ──
+const MOCKS = {
+  "新能源": {
+    stock_code:"300750", stock_name:"宁德时代", recommendation:"推荐",
+    reasoning:"宁德时代2024Q3净利润同比增长26.4%，动力电池全球市占率37%稳居第一，储能业务增长55%成为第二增长曲线。当前PE约18倍处于历史低位，北向资金近期持续加仓，政策面新能源利好持续释放。",
+    sources:[
+      "https://www.eastmoney.com/report/300750_q3_2024",
+      "https://www.sina.com.cn/finance/new_energy_2024"
+    ]
+  },
+  "白酒": {
+    stock_code:"600519", stock_name:"贵州茅台", recommendation:"持有",
+    reasoning:"贵州茅台2024年营收同比增长15%，高端白酒市场份额稳固在60%以上。批价在2600元附近企稳，渠道库存处于健康水平。但当前宏观消费环境偏弱，需关注春节动销数据。五粮液(000858)估值更低但品牌壁垒不如茅台。",
+    sources:[
+      "https://www.eastmoney.com/report/600519_2024",
+      "https://xueqiu.com/article/baijiu_analysis_2024"
+    ]
+  },
+  "半导体": {
+    stock_code:"688981", stock_name:"中芯国际", recommendation:"推荐",
+    reasoning:"2024年全球半导体周期触底回升，AI芯片需求爆发带动晶圆代工产能利用率提升。中芯国际作为国内晶圆代工龙头，28nm以上成熟制程产能满载，Q3营收环比增长12%。政策面大基金三期持续推进，国产替代逻辑强化。",
+    sources:[
+      "https://www.eastmoney.com/report/688981_smic_2024",
+      "https://www.sina.com.cn/tech/semiconductor_2024"
+    ]
+  },
+  "北向资金": {
+    stock_code:"002594", stock_name:"比亚迪", recommendation:"推荐",
+    reasoning:"北向资金连续5日净买入比亚迪超30亿元，外资看好其在东南亚市场的扩张及高端品牌(仰望、方程豹)的放量。2024年全球新能源车销量预计突破350万辆，同比增长25%。垂直一体化供应链优势在价格战中提供安全垫。",
+    sources:[
+      "https://data.eastmoney.com/hsgt/002594.html",
+      "https://xueqiu.com/n/byd_northbound_2024"
+    ]
+  }
+};
+
+function pick(text) {
+  document.getElementById('query').value = text;
+  runDemo();
+}
+
+function findMock(query) {
+  for (const [key, data] of Object.entries(MOCKS)) {
+    if (query.includes(key)) return data;
+  }
+  return MOCKS["新能源"]; // default
+}
+
+function runDemo() {
+  const query = document.getElementById('query').value.trim();
+  if (!query) return;
+
+  const btn = document.getElementById('btn');
+  const result = document.getElementById('result');
+
+  // Loading state
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>分析中...';
+  result.className = 'result';
+  result.innerHTML = '<p class="loading-text"><span class="spinner"></span>Agent 正在搜索权威财经数据...</p>';
+  result.classList.add('show');
+
+  // Simulate delay
+  setTimeout(() => {
+    const data = findMock(query);
+    const recClass = data.recommendation === '推荐' ? 'recommend' : 'hold';
+
+    result.innerHTML = `
+      <div class="result-card">
+        <div class="stock-header">
+          <span class="stock-code">${data.stock_code}</span>
+          <span class="stock-name">${data.stock_name}</span>
+          <span class="rec-badge ${recClass}">${data.recommendation}</span>
+        </div>
+        <div class="reasoning">${data.reasoning}</div>
+        <div class="sources">
+          <strong style="color:var(--muted);font-size:0.85rem">数据来源：</strong>
+          ${data.sources.map(url => `<a href="${url}" target="_blank">${url}</a>`).join('')}
+        </div>
+        <div class="risk">风险提示：以上分析基于公开搜索结果，不构成投资建议。股市有风险，投资需谨慎。</div>
+      </div>
+    `;
+    result.classList.add('show');
+
+    btn.disabled = false;
+    btn.textContent = '分析';
+  }, 1500);
+}
+
+// Enter key triggers search
+document.getElementById('query').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runDemo();
+});
+</script>
+</body>
+</html>

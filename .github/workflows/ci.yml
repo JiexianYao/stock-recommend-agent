@@ -1,0 +1,43 @@
+name: CI - Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run mock tests
+        env:
+          PYTHONPATH: .
+        run: python tests/test_with_mock.py
+
+  # ──────────────────────────────────────────
+  # 集成测试（需要 Secrets）- 按需取消注释启用
+  # ──────────────────────────────────────────
+  # integration:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.11"
+  #     - name: Install dependencies
+  #       run: pip install -r requirements.txt
+  #     - name: Run agent with real API
+  #       env:
+  #         LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+  #         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  #         TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+  #         PYTHONPATH: .
+  #       run: python -c "from src.agent import StockAgent; print(StockAgent().run('推荐一支新能源股票'))"
