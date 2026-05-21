@@ -25,6 +25,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Inject access password
+        run: sed -i "s/__ACCESS_PASSWORD__/${{ secrets.ACCESS_PASSWORD }}/g" index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

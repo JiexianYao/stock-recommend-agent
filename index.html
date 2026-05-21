@@ -67,6 +67,35 @@
   .footer { text-align:center; padding:40px 0; color:var(--muted); font-size:0.85rem; }
   .footer a { color:var(--accent); }
 
+  /* Password Gate */
+  .gate-overlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background:var(--bg); z-index:9999;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .gate-overlay.hidden { display:none; }
+  .gate-box {
+    background:var(--card); border-radius:16px; padding:40px 36px;
+    border:1px solid var(--border); text-align:center; max-width:380px; width:90%;
+  }
+  .gate-box h2 { font-size:1.3rem; margin-bottom:8px; }
+  .gate-box p { color:var(--muted); font-size:0.9rem; margin-bottom:24px; }
+  .gate-input {
+    width:100%; padding:14px 16px; border-radius:10px;
+    border:1px solid var(--border); background:var(--bg);
+    color:var(--text); font-size:1.5rem; text-align:center;
+    letter-spacing:8px; outline:none; font-family:monospace;
+  }
+  .gate-input:focus { border-color:var(--accent); }
+  .gate-input.error { border-color:var(--red); animation:shake .4s; }
+  @keyframes shake {
+    0%,100% { transform:translateX(0); }
+    25% { transform:translateX(-6px); }
+    75% { transform:translateX(6px); }
+  }
+  .gate-error { color:var(--red); font-size:0.85rem; margin-top:8px; display:none; }
+  .gate-error.show { display:block; }
+
   @media (max-width:600px) {
     .hero h1 { font-size:1.6rem; }
     .query-row { flex-direction:column; }
@@ -75,6 +104,20 @@
 </style>
 </head>
 <body>
+
+<!-- Password Gate -->
+<div class="gate-overlay" id="gateOverlay">
+  <div class="gate-box">
+    <h2>访问验证</h2>
+    <p>请输入六位访问密钥</p>
+    <input type="password" class="gate-input" id="gateInput"
+           maxlength="6" placeholder="······" autocomplete="off" />
+    <div class="gate-error" id="gateError">密钥错误，请重试</div>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div id="mainContent" style="display:none;">
 <div class="container">
 
   <!-- Hero -->
@@ -134,7 +177,62 @@
   </div>
 </div>
 
+</div><!-- /mainContent -->
+
 <script>
+// ── Password Gate ──
+const ACCESS_PASSWORD = "__ACCESS_PASSWORD__";
+const SESSION_KEY = "stockagent_auth";
+const SESSION_TTL = 15 * 60 * 1000; // 15 minutes
+
+const gateOverlay = document.getElementById("gateOverlay");
+const gateInput = document.getElementById("gateInput");
+const gateError = document.getElementById("gateError");
+const mainContent = document.getElementById("mainContent");
+
+function showMain() {
+  gateOverlay.classList.add("hidden");
+  mainContent.style.display = "";
+  sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+}
+
+function checkSession() {
+  const ts = sessionStorage.getItem(SESSION_KEY);
+  if (ts && (Date.now() - parseInt(ts)) < SESSION_TTL) {
+    showMain();
+    return true;
+  }
+  sessionStorage.removeItem(SESSION_KEY);
+  return false;
+}
+
+function tryUnlock() {
+  const input = gateInput.value.trim();
+  if (input.length < 6) return;
+
+  if (input === ACCESS_PASSWORD) {
+    gateError.classList.remove("show");
+    showMain();
+  } else {
+    gateError.classList.add("show");
+    gateInput.classList.add("error");
+    gateInput.value = "";
+    setTimeout(function() { gateInput.classList.remove("error"); }, 400);
+  }
+}
+
+gateInput.addEventListener("input", function() {
+  gateError.classList.remove("show");
+  if (gateInput.value.length >= 6) tryUnlock();
+});
+
+gateInput.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") tryUnlock();
+});
+
+// Check session on load
+checkSession();
+
 // ── Mock 数据 ──
 const MOCKS = {
   "新能源": {
