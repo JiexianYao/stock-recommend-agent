@@ -1,9 +1,10 @@
 """入口文件 —— 启动金融荐股 Agent。"""
+import asyncio
 from src.utils import config
 from src.agent import StockAgent
 
 
-def main():
+async def main():
     provider = "Google Gemini" if config.LLM_PROVIDER == "gemini" else "OpenAI"
     model = config.GEMINI_MODEL if config.LLM_PROVIDER == "gemini" else config.OPENAI_MODEL
 
@@ -29,9 +30,9 @@ def main():
             break
 
         print("\n[Agent 思考中...]\n")
-        result = agent.run(user_input)
+        result = await agent.run(user_input)
         print(result)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

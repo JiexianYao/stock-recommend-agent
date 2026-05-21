@@ -25,8 +25,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inject access password
-        run: sed -i "s/__ACCESS_PASSWORD__/${{ secrets.ACCESS_PASSWORD }}/g" index.html
+      - name: Inject secrets into index.html
+        env:
+          ACCESS_PASSWORD: ${{ secrets.ACCESS_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+        run: |
+          python3 -c "
+          import os
+          with open('index.html', 'r', encoding='utf-8') as f:
+              content = f.read()
+          content = content.replace('__ACCESS_PASSWORD__', os.environ.get('ACCESS_PASSWORD', ''))
+          content = content.replace('__GEMINI_API_KEY__', os.environ.get('GEMINI_API_KEY', ''))
+          content = content.replace('__TAVILY_API_KEY__', os.environ.get('TAVILY_API_KEY', ''))
+          content = content.replace('__GEMINI_MODEL__', os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash'))
+          with open('index.html', 'w', encoding='utf-8') as f:
+              f.write(content)
+          "
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

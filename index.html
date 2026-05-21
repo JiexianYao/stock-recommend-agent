@@ -134,7 +134,7 @@
 
   <!-- Demo -->
   <div class="demo">
-    <h2>试用 Demo（模拟数据演示）</h2>
+    <h2>试用 Demo（AI + Tavily 联网搜索）</h2>
     <div class="query-row">
       <input type="text" id="query" placeholder="例如：推荐一支新能源龙头股..." />
       <button onclick="runDemo()" id="btn">分析</button>
@@ -180,11 +180,15 @@
 </div><!-- /mainContent -->
 
 <script>
-// ── Password Gate ──
+// ── 配置（部署时由 GitHub Actions 注入） ──
 const ACCESS_PASSWORD = "__ACCESS_PASSWORD__";
+const GEMINI_API_KEY = "__GEMINI_API_KEY__";
+const GEMINI_MODEL = "__GEMINI_MODEL__";
+const TAVILY_API_KEY = "__TAVILY_API_KEY__";
 const SESSION_KEY = "stockagent_auth";
-const SESSION_TTL = 15 * 60 * 1000; // 15 minutes
+const SESSION_TTL = 15 * 60 * 1000;
 
+// ── Password Gate ──
 const gateOverlay = document.getElementById("gateOverlay");
 const gateInput = document.getElementById("gateInput");
 const gateError = document.getElementById("gateError");
@@ -197,7 +201,7 @@ function showMain() {
 }
 
 function checkSession() {
-  const ts = sessionStorage.getItem(SESSION_KEY);
+  var ts = sessionStorage.getItem(SESSION_KEY);
   if (ts && (Date.now() - parseInt(ts)) < SESSION_TTL) {
     showMain();
     return true;
@@ -207,9 +211,8 @@ function checkSession() {
 }
 
 function tryUnlock() {
-  const input = gateInput.value.trim();
+  var input = gateInput.value.trim();
   if (input.length < 6) return;
-
   if (input === ACCESS_PASSWORD) {
     gateError.classList.remove("show");
     showMain();
@@ -225,106 +228,139 @@ gateInput.addEventListener("input", function() {
   gateError.classList.remove("show");
   if (gateInput.value.length >= 6) tryUnlock();
 });
-
 gateInput.addEventListener("keydown", function(e) {
   if (e.key === "Enter") tryUnlock();
 });
-
-// Check session on load
 checkSession();
 
-// ── Mock 数据 ──
-const MOCKS = {
-  "新能源": {
-    stock_code:"300750", stock_name:"宁德时代", recommendation:"推荐",
-    reasoning:"宁德时代2024Q3净利润同比增长26.4%，动力电池全球市占率37%稳居第一，储能业务增长55%成为第二增长曲线。当前PE约18倍处于历史低位，北向资金近期持续加仓，政策面新能源利好持续释放。",
-    sources:[
-      "https://www.eastmoney.com/report/300750_q3_2024",
-      "https://www.sina.com.cn/finance/new_energy_2024"
-    ]
-  },
-  "白酒": {
-    stock_code:"600519", stock_name:"贵州茅台", recommendation:"持有",
-    reasoning:"贵州茅台2024年营收同比增长15%，高端白酒市场份额稳固在60%以上。批价在2600元附近企稳，渠道库存处于健康水平。但当前宏观消费环境偏弱，需关注春节动销数据。五粮液(000858)估值更低但品牌壁垒不如茅台。",
-    sources:[
-      "https://www.eastmoney.com/report/600519_2024",
-      "https://xueqiu.com/article/baijiu_analysis_2024"
-    ]
-  },
-  "半导体": {
-    stock_code:"688981", stock_name:"中芯国际", recommendation:"推荐",
-    reasoning:"2024年全球半导体周期触底回升，AI芯片需求爆发带动晶圆代工产能利用率提升。中芯国际作为国内晶圆代工龙头，28nm以上成熟制程产能满载，Q3营收环比增长12%。政策面大基金三期持续推进，国产替代逻辑强化。",
-    sources:[
-      "https://www.eastmoney.com/report/688981_smic_2024",
-      "https://www.sina.com.cn/tech/semiconductor_2024"
-    ]
-  },
-  "北向资金": {
-    stock_code:"002594", stock_name:"比亚迪", recommendation:"推荐",
-    reasoning:"北向资金连续5日净买入比亚迪超30亿元，外资看好其在东南亚市场的扩张及高端品牌(仰望、方程豹)的放量。2024年全球新能源车销量预计突破350万辆，同比增长25%。垂直一体化供应链优势在价格战中提供安全垫。",
-    sources:[
-      "https://data.eastmoney.com/hsgt/002594.html",
-      "https://xueqiu.com/n/byd_northbound_2024"
-    ]
-  }
-};
-
+// ── AI 分析 ──
 function pick(text) {
-  document.getElementById('query').value = text;
+  document.getElementById("query").value = text;
   runDemo();
 }
 
-function findMock(query) {
-  for (const [key, data] of Object.entries(MOCKS)) {
-    if (query.includes(key)) return data;
-  }
-  return MOCKS["新能源"]; // default
+function escapeHtml(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function runDemo() {
-  const query = document.getElementById('query').value.trim();
+function showError(msg) {
+  var result = document.getElementById("result");
+  result.innerHTML = '<div class="result-card" style="color:var(--red)">' + escapeHtml(msg) + '</div>';
+  result.classList.add("show");
+}
+
+async function runDemo() {
+  var query = document.getElementById("query").value.trim();
   if (!query) return;
 
-  const btn = document.getElementById('btn');
-  const result = document.getElementById('result');
+  var btn = document.getElementById("btn");
+  var result = document.getElementById("result");
 
-  // Loading state
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>分析中...';
-  result.className = 'result';
-  result.innerHTML = '<p class="loading-text"><span class="spinner"></span>Agent 正在搜索权威财经数据...</p>';
-  result.classList.add('show');
+  result.className = "result";
+  result.classList.add("show");
 
-  // Simulate delay
-  setTimeout(() => {
-    const data = findMock(query);
-    const recClass = data.recommendation === '推荐' ? 'recommend' : 'hold';
+  try {
+    // Step 1: Tavily 联网搜索
+    result.innerHTML = '<p class="loading-text"><span class="spinner"></span>正在联网搜索权威财经数据...</p>';
+    var searchData = await searchTavily(query);
 
-    result.innerHTML = `
-      <div class="result-card">
-        <div class="stock-header">
-          <span class="stock-code">${data.stock_code}</span>
-          <span class="stock-name">${data.stock_name}</span>
-          <span class="rec-badge ${recClass}">${data.recommendation}</span>
-        </div>
-        <div class="reasoning">${data.reasoning}</div>
-        <div class="sources">
-          <strong style="color:var(--muted);font-size:0.85rem">数据来源：</strong>
-          ${data.sources.map(url => `<a href="${url}" target="_blank">${url}</a>`).join('')}
-        </div>
-        <div class="risk">风险提示：以上分析基于公开搜索结果，不构成投资建议。股市有风险，投资需谨慎。</div>
-      </div>
-    `;
-    result.classList.add('show');
+    // Step 2: Gemini 分析
+    result.innerHTML = '<p class="loading-text"><span class="spinner"></span>AI 正在综合分析...</p>';
+    var analysis = await callGemini(query, searchData);
 
+    // Step 3: 渲染结果
+    var recClass = analysis.recommendation === "推荐" ? "recommend" : "hold";
+    result.innerHTML =
+      '<div class="result-card">' +
+        '<div class="stock-header">' +
+          '<span class="stock-code">' + escapeHtml(analysis.stock_code || "---") + '</span>' +
+          '<span class="stock-name">' + escapeHtml(analysis.stock_name || "") + '</span>' +
+          '<span class="rec-badge ' + recClass + '">' + escapeHtml(analysis.recommendation || "---") + '</span>' +
+        '</div>' +
+        '<div class="reasoning">' + escapeHtml(analysis.reasoning || "") + '</div>' +
+        '<div class="sources">' +
+          '<strong style="color:var(--muted);font-size:0.85rem">数据来源：</strong>' +
+          (analysis.sources || []).map(function(url) { return '<a href="' + url + '" target="_blank">' + url + '</a>'; }).join("") +
+        '</div>' +
+        '<div class="risk">' + escapeHtml(analysis.risk_note || "以上分析基于公开搜索结果，不构成投资建议。股市有风险，投资需谨慎。") + '</div>' +
+      '</div>';
+  } catch (e) {
+    showError("分析失败: " + e.message);
+  } finally {
     btn.disabled = false;
-    btn.textContent = '分析';
-  }, 1500);
+    btn.textContent = "分析";
+    result.classList.add("show");
+  }
+}
+
+async function searchTavily(query) {
+  var resp = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: TAVILY_API_KEY,
+      query: query + " 股票 财经",
+      max_results: 5,
+      search_depth: "basic",
+    }),
+  });
+  if (!resp.ok) throw new Error("搜索请求失败 (HTTP " + resp.status + ")");
+  var data = await resp.json();
+  return (data.results || []).map(function(r) {
+    return { title: r.title, url: r.url, snippet: r.content || r.snippet || "" };
+  });
+}
+
+async function callGemini(query, searchResults) {
+  var searchText = searchResults.map(function(r) {
+    return "【" + r.title + "】" + r.snippet + "（来源：" + r.url + "）";
+  }).join("\n\n");
+
+  var userPrompt =
+    "## 用户问题\n" + query + "\n\n" +
+    "## 联网搜索结果\n" + (searchText || "未找到相关搜索结果") + "\n\n" +
+    "请根据以上搜索结果，给出荐股分析。只输出如下 JSON 格式，不要输出其他内容：\n" +
+    '{"stock_code":"六位代码或空","stock_name":"股票名称","recommendation":"推荐/持有/观望/卖出",' +
+    '"reasoning":"推荐理由（200字以内，基于搜索数据）","sources":["URL列表"],' +
+    '"risk_note":"风险提示"}\n\n' +
+    "重要：只依据搜索结果做分析，不要编造数据。结果不足时诚实说明。";
+
+  var resp = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + GEMINI_API_KEY,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: "你是一个专业的金融荐股分析师。只依据提供的搜索数据做分析，不要编造任何数字。输出必须是合法 JSON。" }]
+        },
+        contents: [
+          { role: "user", parts: [{ text: userPrompt }] }
+        ],
+        generationConfig: { temperature: 0.3 },
+      }),
+    }
+  );
+
+  if (!resp.ok) {
+    var errText = "";
+    try { var errData = await resp.json(); errText = errData.error.message; } catch(e) {}
+    throw new Error("Gemini API 错误: " + (errText || "HTTP " + resp.status));
+  }
+
+  var data = await resp.json();
+  var text = data.candidates[0].content.parts[0].text;
+
+  // 提取 JSON（可能被 markdown 代码块包裹）
+  var jsonStr = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  return JSON.parse(jsonStr);
 }
 
 // Enter key triggers search
-document.getElementById('query').addEventListener('keydown', e => {
-  if (e.key === 'Enter') runDemo();
+document.getElementById("query").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") runDemo();
 });
 </script>
 </body>

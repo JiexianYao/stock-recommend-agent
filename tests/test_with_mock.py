@@ -3,6 +3,7 @@ Mock 数据集成测试 —— 不依赖任何外部 API，用 mock 数据跑通
 
 用法:  PYTHONPATH=. python tests/test_with_mock.py
 """
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -111,7 +112,7 @@ def test_agent_full_pipeline(mock_chat, mock_search_skill):
     ]
 
     agent = StockAgent()
-    result = agent.run("推荐一支新能源龙头股")
+    result = asyncio.run(agent.run("推荐一支新能源龙头股"))
 
     output = json.loads(result)
     assert output["stock_code"] == "300750"
@@ -134,7 +135,7 @@ def test_agent_direct_answer(mock_chat):
     mock_chat.return_value = LLMResponse(text="你好！请告诉我你想了解哪方面的股票信息？")
 
     agent = StockAgent()
-    result = agent.run("你好")
+    result = asyncio.run(agent.run("你好"))
 
     assert "你好" in result or "股票" in result
     assert mock_chat.call_count == 1, "简单回复只需1轮"
